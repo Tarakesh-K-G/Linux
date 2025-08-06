@@ -1,0 +1,71 @@
+# Script to call germline variants in a human WGS paired end reads 2 X 100bp
+
+# download data
+wget ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/phase3/data/HG00096/sequence_read/SRR062634_1.filt.fastq.gz
+wget ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/phase3/data/HG00096/sequence_read/SRR062634_2.filt.fastq.gz
+
+# download reference files
+wget -P ~/home/tarak/reference/hg38/ https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz
+gunzip ~/home/tarak/reference/hg38/hg38.fa.gz
+
+# index ref - .fai file before running haplotype caller
+samtools faidx ~/home/tarak/reference/hg38/hg38.fa
+
+# install GATK4
+java --version
+sudo apt update
+sudo apt install openjdk-21-jdk
+sudo apt install python3 python3-pip
+weget ~/home/tarak/https://github.com/broadinstitute/gatk/releases/download/4.6.2.0/gatk-4.6.2.0.zip
+
+# ref dict - .dict file before running haplotype caller
+./gatk CreateSequenceDictionary R=~/home/tarak/reference/hg38/hg38.fa O=~/home/tarak/reference/hg38/hg38.dict
+
+# download known sites files for BQSR from GATK resource bundle
+wget -P ~/home/tarak/reference/hg38/ https://storage.googleapis.com/genomics-public-data/resources/broad/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf
+wget -P ~/home/tarak/reference/hg38/ https://storage.googleapis.com/genomics-public-data/resources/broad/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf.idx
+
+#######Variant Calling Steps#########
+
+# STEP 1: QC - Run fastqc
+sudo apt install fastqc
+fastqc /home/tarak/reads/SRR062634_1.filt.fastq.gz -o /home/tarak/reads/
+fastqc /home/tarak/reads/SRR062634_2.filt.fastq.gz -o /home/tarak/reads/
+
+# Trimming (If there is any adopter or low quality shown in fastqc file)
+sudo apt install fastp
+fatsp -i /home/tarak/reads/SRR062634_1.filt.fastq.gz\
+-I /home/tarak/reads/SRR062634_2.filt.fastq.gz\
+-o /home/tarak/reads/SRR062634_1.trimmed.filt.fastq.gz\
+-O /home/tarak/reads/SRR062634_2.trimmed..filt.fastq.gz\
+-h /home/tarak/reads/fastp_report.html\
+-j /home/tarak/reads/fastp_report.jsom\
+-W 4
+
+#STEP 2: Map to reference using BWA-MEM
+# BWA index reference 
+bwa index /home/tarak/reference/hg38/hg38.fa
+
+#BWA alignment
+bwa mem -R "@RG\tID:SRR062634\tSM:SRR062634\tPL:ILLUMINA\tLB:lib1" /home/tarak/reference/hg38/hg38.fa /home/tarak/reads/SRR062634_1.trimmed.filt.fastq.gz /home/tarak/reads/SRR062634_2.trimmed..filt.fastq.gz > /home/tarak/aligned/SRR062634.aligned.sam
+
+# STEP 3: Mark Duplicates and Sort - GATK4
+./gatk MarkDuplicatesSpark -I /home/tarak/aligned/SRR062634.aligned.sam -O /home/tarak/aligned/SRR062634_sorted_dedup_reads.bam
+
+# STEP 4: Base quality recalibration
+# 1. build the model
+./gatk BaseRecalibrator -I /home/tarak/aligned/SRR062634_sorted_dedup_reads.bam -R /home/tarak/reference/hg38/hg38.fa --known-sites /home/tarak/reference/hg38/Homo_sapiens_assembly38.dbsnp138.vcf -O /home/tarak/data/recal_data.table
+
+# 2. Apply the model to adjust the base quality scores
+./gatk ApplyBQSR -I /home/tarak/aligned/SRR062634_sorted_dedup_reads.bam -R /home/tarak/reference/hg38/hg38.fa --bqsr-recal-file /home/tarak/data/recal_data.table -O /home/tarak/aligned/SRR062634_sorted_dedup_bqsr_reads.bam 
+
+# STEP 5: Collect Alignment & Insert Size Metrics
+./gatk CollectAlignmentSummaryMetrics R=/home/tarak/reference/hg38/hg38.fa I=/home/tarak/aligned/SRR062634_sorted_dedup_bqsr_reads.bam O=/home/tarak/aligned/alignment_metrics.txt
+./gatk CollectInsertSizeMetrics INPUT=/home/tarak/aligned/SRR062634_sorted_dedup_bqsr_reads.bam OUTPUT=/home/tarak/aligned/insert_size_metrics.txt HISTOGRAM_FILE=/home/tarak/aligned/insert_size_histogram.pdf
+
+# STEP 6: Call Variants - gatk haplotype caller
+./gatk HaplotypeCaller -R /home/tarak/reference/hg38/hg38.fa -I /home/tarak/aligned/SRR062634_sorted_dedup_bqsr_reads.bam -O /home/tarak/result/raw_variants.vcf
+
+# extract SNPs & INDELS
+./gatk SelectVariants -R /home/tarak/reference/hg38/hg38.fa -V /home/tarak/result/raw_variants.vcf --select-type SNP -O /home/tarak/result/raw_snps.vcf
+./gatk SelectVariants -R /home/tarak/reference/hg38/hg38.fa -V /home/tarak/result/raw_variants.vcf --select-type INDEL -O /home/tarak/result/raw_indels.vcf
