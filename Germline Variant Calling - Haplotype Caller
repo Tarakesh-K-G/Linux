@@ -69,3 +69,5 @@ bwa mem -R "@RG\tID:SRR062634\tSM:SRR062634\tPL:ILLUMINA\tLB:lib1" /home/tarak/r
 # extract SNPs & INDELS
 ./gatk SelectVariants -R /home/tarak/reference/hg38/hg38.fa -V /home/tarak/result/raw_variants.vcf --select-type SNP -O /home/tarak/result/raw_snps.vcf
 ./gatk SelectVariants -R /home/tarak/reference/hg38/hg38.fa -V /home/tarak/result/raw_variants.vcf --select-type INDEL -O /home/tarak/result/raw_indels.vcf
+
+
