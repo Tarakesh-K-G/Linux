@@ -1,0 +1,61 @@
+# Filter SNPs
+./gatk VariantFiltration \
+	-R /home/tarak/reference/hg38/hg38.fa \
+	-V /home/tarak/result/raw_snps.vcf \
+	-O /home/tarak/result/filtered_snps.vcf \
+	-filter-name "QD_filter" -filter "QD < 2.0" \
+	-filter-name "FS_filter" -filter "FS > 60.0" \
+	-filter-name "MQ_filter" -filter "MQ < 40.0" \
+	-filter-name "SOR_filter" -filter "SOR > 4.0" \
+	-filter-name "MQRankSum_filter" -filter "MQRankSum < -12.5" \
+	-filter-name "ReadPosRankSum_filter" -filter "ReadPosRankSum < -8.0" \
+	-genotype-filter-expression "DP < 10" \
+	-genotype-filter-name "DP_filter" \
+	-genotype-filter-expression "GQ < 10" \
+	-genotype-filter-name "GQ_filter"
+
+# Filter INDELS
+./gatk VariantFiltration \
+	-R /home/tarak/reference/hg38/hg38.fa \
+	-V /home/tarak/result/raw_indels.vcf \
+	-O /home/tarak/result/filtered_indels.vcf \
+	-filter-name "QD_filter" -filter "QD < 2.0" \
+	-filter-name "FS_filter" -filter "FS > 200.0" \
+	-filter-name "SOR_filter" -filter "SOR > 10.0" \
+	-genotype-filter-expression "DP < 10" \
+	-genotype-filter-name "DP_filter" \
+	-genotype-filter-expression "GQ < 10" \
+	-genotype-filter-name "GQ_filter"
+
+# Select Variants that PASS filters
+./gatk SelectVariants \
+	--exclude-filtered \
+	-V /home/tarak/result/filtered_snps.vcf \
+	-O /home/tarak/result/analysis-ready-snps.vcf
+
+./gatk SelectVariants \
+	--exclude-filtered \
+	-V /home/tarak/result/filtered_indels.vcf \
+	-O /home/tarak/result/analysis-ready-indels.vcf
+
+# Annotate using Funcotator
+./gatk Funcotator \
+	--variant /home/tarak/result/analysis-ready-snps.vcf \
+	--reference /home/tarak/reference/hg38/hg38.fa \
+	--ref-version hg38 \
+	--data-sources-path /home/tarak/demo/tools/functotator_prepackaged_sources/funcotator/hg38/funcotator_dataSources.v1.7.20200521g \
+	--output /home/tarak/result/analysis-ready-snps-filteredGT-functotated.vcf \
+	--output-file-format VCF
+
+./gatk Funcotator \
+	--variant /home/tarak/result/analysis-ready-indels.vcf \
+	--reference /home/tarak/reference/hg38/hg38.fa \
+	--ref-version hg38 \
+	--data-sources-path /home/tarak/demo/tools/functotator_prepackaged_sources/funcotator/hg38/funcotator_dataSources.v1.7.20200521g \
+	--output /home/tarak/result/analysis-ready-indels-filteredGT-functotated.vcf \
+	--output-file-format VCF
+
+# Extract fields from a VCF file to a tab-delimited table
+./gatk VariantsToTable \
+	-V /home/tarak/result/analysis-ready-snps-filteredGT-functotated.vcf -F AC -F AN -F DP -F AF -F FUNCOTATION \
+	-O /home/tarak/result/output_snps.table
