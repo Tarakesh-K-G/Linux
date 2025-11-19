@@ -16,7 +16,7 @@ java --version
 sudo apt update
 sudo apt install openjdk-21-jdk
 sudo apt install python3 python3-pip
-weget ~/home/tarak/https://github.com/broadinstitute/gatk/releases/download/4.6.2.0/gatk-4.6.2.0.zip
+wget ~/home/tarak/https://github.com/broadinstitute/gatk/releases/download/4.6.2.0/gatk-4.6.2.0.zip
 
 # ref dict - .dict file before running haplotype caller
 ./gatk CreateSequenceDictionary R=~/home/tarak/reference/hg38/hg38.fa O=~/home/tarak/reference/hg38/hg38.dict
